@@ -6,6 +6,7 @@
 #include <Windows.h>
 #include <cmath>
 #include <ctime>
+#include <list>
 #define ESC            27
 #define ORIGIN         0
 #define ENDWORLD       60
@@ -13,14 +14,14 @@
 #define ITEMSCORE      50
 #define ITEMSPAWNTIME  150
 #define PLAYERLIVES    3
+#define LEFT           -1
+#define RIGHT		   1
 
 void DeactivateEnemy(bool& spawn, int& counter);
 void DeactivateItem(bool& spawn, int& counter);
 
 int main() {
 	int x			   = 0;
-	int leftBulletPos  = 0;
-	int rightBulletPos = 0;
 	int enemyCounter   = ENEMYSPAWNTIME;
 	int enemyPos       = -1;
 	int score          = 0;
@@ -28,11 +29,22 @@ int main() {
 	int itemPos        = -1;
 	int itemCounter    = ITEMSPAWNTIME;
 	int lives          = PLAYERLIVES;
-	bool shotRight     = false;
-	bool shotLeft      = false;
 	bool spawnEnemy    = false;
 	bool spawnedRight  = false;
 	bool spawnItem     = false;
+
+	struct bullet {
+		int x;
+		int dir;
+	};
+	std::list <bullet> bullets;
+
+	struct enemy {
+		int x;
+		int dir;
+	};
+	std::list <enemy> enemies;
+	
 
 	srand(time(NULL));
 	printf("\n\n\n\n\n\n\n\n\n\n\n\n");
@@ -47,49 +59,74 @@ int main() {
 				--x;
 			if (pressedKey == 'd' && x < ENDWORLD)
 				++x;
-			if (pressedKey == 'f' && (!shotLeft && !shotRight)) {
-				shotLeft = true;
-				leftBulletPos = x - 1;
+			if (pressedKey == 'f') {
+				bullet l;
+				l.x = x;
+				l.dir = LEFT;
+				bullets.push_back(l);
 			}
-			if (pressedKey == 'g' && (!shotLeft && !shotRight)) {
-				shotRight = true;
-				rightBulletPos = x + 1;
+			if (pressedKey == 'g') {
+				bullet r;
+				r.x = x;
+				r.dir = RIGHT;
+				bullets.push_back(r);
 			}
 		}
 
 		//logica
 		//logica de disparos
-		if (shotLeft)
-			--leftBulletPos;
-
-		if (shotRight)
-			++rightBulletPos;
-
-		if (leftBulletPos < ORIGIN)
-			shotLeft = false;
-
-		if (rightBulletPos > ENDWORLD)
-			shotRight = false;
+		for (auto it = bullets.begin(); it != bullets.end(); it++) {
+			if (it->dir == LEFT) {
+				--it->x;
+				if (it->x < ORIGIN) {
+					it = bullets.erase(it);
+					if (it == bullets.end())
+						break;
+				}
+			} else {
+				++it->x;
+				if (it->dir >= ENDWORLD)
+					it = bullets.erase(it);
+			}
+		}
 
 		//logica de enemigo
 		--enemyCounter;
 
-		//spawn del enemigo
-		if (!enemyCounter && !spawnEnemy) {
-			spawnEnemy = true;
-			enemyPos = rand() % 2 + 1;
-			if (enemyPos == 2) {
-				enemyPos = ENDWORLD;
-				spawnedRight = true;
-			}
-			else {
-				enemyPos = ORIGIN;
-				spawnedRight = false;
+		//movimiento de enemigos
+		if (!(whileCounter % 3)) {
+			for (auto it = enemies.begin(); it != enemies.end(); it++) {
+				if (it->dir == LEFT) {
+					--it->x;
+					if (it->x < ORIGIN) {
+						it = enemies.erase(it);
+						if (it == enemies.end())
+							break;
+					}
+				} else
+					++it->x;
 			}
 		}
 
+		//spawn del enemigo
+		if (!enemyCounter) {
+			enemyPos = rand() % 2 + 1;
+			enemy e;
+			if (enemyPos == 2) {
+				e.x = ENDWORLD;
+				e.dir = LEFT;
+			}
+			else {
+				e.x = ORIGIN;
+				e.dir = RIGHT;
+			}
+
+			enemies.push_back(e);
+			enemyCounter = ENEMYSPAWNTIME;
+		}
+
 		//destruccion de enemigo
-		if (spawnEnemy) {
+		/*if (spawnEnemy) {
 			if (enemyPos == x) {
 				x = ORIGIN;
 				--lives;
@@ -107,13 +144,7 @@ int main() {
 					DeactivateEnemy(spawnEnemy, enemyCounter);
 				}
 			}
-		}
-
-		//movimiento del enemigo
-		if ((spawnEnemy && spawnedRight) && !(whileCounter % 3))
-			--enemyPos;
-		else if ((spawnEnemy && !spawnedRight) && !(whileCounter % 3))
-			++enemyPos;
+		}*/
 
 		++whileCounter;
 
@@ -129,7 +160,7 @@ int main() {
 			if (itemPos == x) {
 				score += ITEMSCORE;
 				DeactivateItem(spawnItem, itemCounter);
-			} else if (shotLeft) {
+			}/* else if (shotLeft) {
 				if (itemPos == leftBulletPos) {
 					shotLeft = false;
 					DeactivateItem(spawnItem, itemCounter);
@@ -139,10 +170,26 @@ int main() {
 					shotRight = false;
 					DeactivateItem(spawnItem, itemCounter);
 				}
-			}
+			}*/
 		}
 
 		--itemCounter;
+
+		//deteccion de colisiones
+		for (auto it = bullets.begin(); it != bullets.end(); it++) {
+			for (auto ite = enemies.begin(); ite != enemies.end(); ite++) {
+				if (ite->x == it->x+1 || ite->x == ite->x-1) {
+					it = bullets.erase(it);
+					ite = enemies.erase(ite);
+				}
+				if (ite == enemies.end()) {
+					break;
+				}
+			}
+			if (it == bullets.end()) {
+				break;
+			}
+		}
 
 		//comprobacion de vidas
 		if (lives < 0)
@@ -152,18 +199,44 @@ int main() {
 		printf("Lifes: %i ", lives);
 
 		for (int i = ORIGIN; i <= ENDWORLD; i++) {
-			if (i == x)
+			bool printed = false;
+
+			if (i == x && !printed) {
 				printf("X");
-			else if (shotLeft && i == leftBulletPos)
-				printf("<");
-			else if (shotRight && i == rightBulletPos)
-				printf(">");
-			else if (i == enemyPos && spawnEnemy)
-				printf("Y");
-			else if (i == itemPos && spawnItem)
+				printed = true;
+			}
+
+			if (enemies.size() && !printed) {
+				for (auto it = enemies.begin(); it != enemies.end(); it++) {
+					if (i == it->x) {
+						printf("Y");
+						printed = true;
+					}
+				}
+			}
+
+			if (i == itemPos && spawnItem && !printed) {
 				printf(":");
-			else
+				printed = true;
+			}
+
+			if (bullets.size() && !printed) {
+				for (auto it = bullets.begin(); it != bullets.end(); it++) {
+					if (i == it->x) {
+						if (it->dir == LEFT)
+							printf("<");
+						else
+							printf(">");
+							
+						printed = true;
+					}
+				}
+			}
+
+			if (!printed) {
 				printf("_");
+			}
+			
 		}
 
 		printf(" SCORE: %i\r", score);
